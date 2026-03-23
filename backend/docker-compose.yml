@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: kotizo_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  evolution_api:
+    image: atendai/evolution-api:latest
+    container_name: kotizo_evolution
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=kotizo-evolution-key
+      - DATABASE_ENABLED=false
+      - REDIS_ENABLED=true
+      - REDIS_URI=redis://redis:6379/1
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:
