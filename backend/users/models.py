@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 
+
 class UserManager(BaseUserManager):
     def create_user(self, numero_telephone, password=None, **extra_fields):
         if not numero_telephone:
@@ -42,7 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     niveau = models.CharField(max_length=20, choices=NIVEAU_CHOICES, default='basique')
     theme = models.CharField(max_length=20, choices=THEME_CHOICES, default='vert')
 
-    # Vérification
+    # Vérification CNI
     est_verifie = models.BooleanField(default=False)
     cni_recto = models.ImageField(upload_to='cni/', null=True, blank=True)
     cni_verso = models.ImageField(upload_to='cni/', null=True, blank=True)
@@ -62,7 +63,19 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     # Parrainage
     code_parrainage = models.CharField(max_length=10, unique=True, null=True, blank=True)
-    parrain = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='filleuls')
+    parrain = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='filleuls'
+    )
+
+    # Géolocalisation
+    pays = models.CharField(max_length=100, blank=True)
+    pays_code = models.CharField(max_length=5, blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    derniere_ip = models.GenericIPAddressField(null=True, blank=True)
 
     # Django
     is_staff = models.BooleanField(default=False)
@@ -116,11 +129,17 @@ class StaffPermission(models.Model):
         ('full', 'Accès complet'),
     ]
 
-    staff_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='staff_permissions')
+    staff_user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='staff_permissions'
+    )
     section = models.CharField(max_length=50, choices=SECTION_CHOICES)
     permission_level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='read')
     actif = models.BooleanField(default=True)
-    cree_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='staff_crees')
+    cree_par = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, related_name='staff_crees'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -134,7 +153,10 @@ class StaffPermission(models.Model):
 class OTPToken(models.Model):
     CANAL_CHOICES = [('email', 'Email'), ('whatsapp', 'WhatsApp')]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_tokens', null=True, blank=True)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='otp_tokens', null=True, blank=True
+    )
     numero_telephone = models.CharField(max_length=20)
     email = models.EmailField(null=True, blank=True)
     code = models.CharField(max_length=6)
@@ -147,5 +169,4 @@ class OTPToken(models.Model):
         db_table = 'otp_tokens'
 
     def est_valide(self):
-        from django.utils import timezone
         return not self.est_utilise and timezone.now() < self.expires_at

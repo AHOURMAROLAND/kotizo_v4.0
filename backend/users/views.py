@@ -1,7 +1,6 @@
 import random
 from datetime import timedelta
 from django.utils import timezone
-from django.contrib.auth import authenticate
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -15,6 +14,24 @@ from .serializers import (
 from core.logger import get_logger
 
 logger = get_logger()
+
+
+def get_location_from_ip(ip):
+    try:
+        import requests as req
+        r = req.get(f"http://ip-api.com/json/{ip}?lang=fr", timeout=3)
+        data = r.json()
+        if data.get('status') == 'success':
+            return {
+                'ville': data.get('city', ''),
+                'pays': data.get('country', ''),
+                'pays_code': data.get('countryCode', ''),
+                'latitude': data.get('lat'),
+                'longitude': data.get('lon'),
+            }
+    except Exception:
+        pass
+    return None
 
 
 class InscriptionView(APIView):
@@ -75,6 +92,20 @@ class ConnexionView(APIView):
             return Response({'error': 'Identifiants incorrects.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         user.tentatives_connexion = 0
+
+        # Géolocalisation par IP
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+        if ip:
+            ip = ip.split(',')[0].strip()
+            location = get_location_from_ip(ip)
+            if location:
+                user.derniere_ip = ip
+                user.ville = location['ville']
+                user.pays = location['pays']
+                user.pays_code = location['pays_code']
+                user.latitude = location['latitude']
+                user.longitude = location['longitude']
+
         user.save()
 
         refresh = RefreshToken.for_user(user)
@@ -112,7 +143,10 @@ class SoumettreVerificationView(APIView):
         cni_recto = request.FILES.get('cni_recto')
         cni_verso = request.FILES.get('cni_verso')
         if not cni_recto or not cni_verso:
-            return Response({'error': 'Les deux faces de la CNI sont requises.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Les deux faces de la CNI sont requises.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         user.cni_recto = cni_recto
         user.cni_verso = cni_verso
         user.cni_statut = 'en_attente'
